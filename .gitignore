@@ -1,2 +1,4 @@
-# Don't include venv, duh
+# Good practice to not include virtualenv directory
 venv/
+__pycache__/
+*.pyc
