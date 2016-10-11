@@ -22,11 +22,12 @@ db.app = app
 db.init_app(app)
 db.create_all()
 
-
 #Create some dummy data
-r1 = Request('http://www.google.com')
+# self, url, searchmode='DFS', depth=10, keyword=None
+r1 = Request('http://www.google.com', 'DFS', 10)
 db.session.add(r1)
 db.session.commit()
+    
 
 # Start API-Manager
 apimanager.init_app(app, flask_sqlalchemy_db=db)
