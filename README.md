@@ -27,6 +27,7 @@ You will now be in the virtual environment. You can leave this by typing
 
 2. Start the backend in a terminal
 ```
+cd backend/
 python -m backend.app
 ```
 
