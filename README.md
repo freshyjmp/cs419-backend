@@ -39,7 +39,7 @@ python -m backend.app
 http POST localhost:5000/api/requests/ url=http://myfunwebsite.com keyword=fun dept=5 searchmode=DFS
 ```
 
-5. View the data
++ View the data
   *Can go to http://localhost:5000/api/request to see all requests
   *Or can go to http://localhost:500/api/request/<your request id> to see a single request
   *Or you can use sqlite3 on /tmp/test.db to see the data. 
