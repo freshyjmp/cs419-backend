@@ -15,8 +15,11 @@ The idea is that the child requests of building the graph can be very time-consu
 Check out the repository to whatever directory you want.
 
 1. Enable the virtual environment
+
 ```
+virtualenv --no-site-packages -p python3 venv
 source ./venv/bin/activate
+pip install -r ./requirements.txt
 ```
 
 You will now be in the virtual environment. You can leave this by typing 
