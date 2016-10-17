@@ -6,13 +6,8 @@ from backend.db import db
 from backend.models import Request, Edge
 from backend.api import apimanager
 
-def count_words_at_url(url):
-    resp = requests.get(url)
-    return len(resp.text.split())
-
 # Instantiate Application
 app = Flask(__name__)
-
 
 # Create database
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/test.db'
@@ -27,11 +22,11 @@ db.create_all()
 r1 = Request('http://www.google.com', 'DFS', 10)
 db.session.add(r1)
 db.session.commit()
-    
+
+print("HERPDERP")
 
 # Start API-Manager
 apimanager.init_app(app, flask_sqlalchemy_db=db)
-
 
 # This is a decorator
 @app.route('/')
