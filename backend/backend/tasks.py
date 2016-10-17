@@ -34,4 +34,4 @@ def get_links_on_page(url, request, max_depth, current_depth,
             if current_depth < max_depth:
                 get_links_on_page.delay(link, request, max_depth, 
                                         current_depth+1, keyword, searchmode)
-        return "So fuckin dank bruh"
+        return "impolite words here"
