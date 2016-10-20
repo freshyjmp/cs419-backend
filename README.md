@@ -28,15 +28,22 @@ You will now be in the virtual environment. You can leave this by typing
 + Start the backend in a terminal
 ```
 cd backend/
-python -m backend.app
+python -m backend.run
 ```
 
 + Access the application at http://localhost:5000. 
 
 
+
++ Start the Celery Task Queue
+
+cd backend/
+celery -A backend.tasks.q worker --concurrency 2 <---(this starts two workers. more investigation needed to see how the database handles these inserts. So far pretty good.)
+
+
 + Make an HTTP POST request (you should install httpie for this, it's great!)
 ```
-http POST localhost:5000/api/requests/ url=http://myfunwebsite.com keyword=fun dept=5 searchmode=DFS
+http POST localhost:5000/api/requests/ url=http://myfunwebsite.com keyword=fun depth=2 searchmode=BFS
 ```
 
 + View the data
