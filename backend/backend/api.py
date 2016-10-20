@@ -1,7 +1,7 @@
 import sys
 
 from flask_restless import APIManager
-from backend.models import Request
+from backend.models import Request, Edge
 from backend.tasks import get_links_on_page 
 
 def post_requests_postprocessor(result=None,**kw):

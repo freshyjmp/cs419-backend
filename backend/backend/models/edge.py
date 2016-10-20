@@ -19,6 +19,9 @@ class Edge(db.Model):
     db.UniqueConstraint('request','src_url','dst_url','depth', 
                         name="_request_src_dst_uc")
 
+    def as_dict(self):
+        return {c.name: getattr(self, c.name) for c in self.__table__.columns}
+
     def __init__(self, request, src_url, dst_url, depth, had_keyword=False):
         self.request = request
         self.src_url = src_url

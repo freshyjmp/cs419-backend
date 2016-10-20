@@ -10,5 +10,4 @@ class WaltzHTMLParser(HTMLParser):
             for attr in attrs:
                 if attr[0] == 'href':
                     self.links.append(str(attr[1]))
-                    print("    attr:", attr)
 
