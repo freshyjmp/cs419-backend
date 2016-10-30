@@ -18,13 +18,21 @@ from backend.db import db
 q = Celery('tasks',broker='redis://localhost:6379/0')
 
 
-class SqlAlchemyTask(Task):
+class AbstractTask(Task):
     abstract = True
 
 
-@q.task(name='backend.tasks.get_links_on_page', base=SqlAlchemyTask)
+@q.task(name='backend.tasks.get_links_on_page', base=AbstractTask)
 def get_links_on_page(url, request, max_depth, current_depth, 
                       keyword, searchmode):
+
+    # We're going to do this santization here for the initial request
+    # so I can keep it out of javascript land and ensure that bad 
+    # urls don't get populated in the database
+
+    if not url.startswith('http'):
+        url = 'http://' + url
+
     response = requests.get(url)
     if not response:
         raise ValueError("Expected to get a response for %s, but didn't! Abort! Abort!" % (url))
@@ -39,6 +47,9 @@ def get_links_on_page(url, request, max_depth, current_depth,
 
         if link.startswith('/'):
             link = url + link
+
+        if not link.startswith('http'):
+            link = 'http://' + link
 
         if not validators.url(url):
             print("result of validators for %s: %r "  % ( link, validators.url(link)))
