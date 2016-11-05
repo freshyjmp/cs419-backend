@@ -32,8 +32,9 @@ def get_links_on_page(url, request, max_depth, current_depth,
 
     if not url.startswith('http'):
         url = 'http://' + url
-
-    response = requests.get(url)
+    # In order to not make the application hang excessively, I'm setting
+    # timeout to 30 seconds.
+    response = requests.get(url, timeout=30)
     if not response:
         raise ValueError("Expected to get a response for %s, but didn't! Abort! Abort!" % (url))
     parser = WaltzHTMLParser()
