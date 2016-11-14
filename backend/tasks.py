@@ -1,14 +1,16 @@
 """
-In this file we define the tasks for our backend 
- application to perform. 
+In this file we define the tasks for our backend
+ application to perform.
 
 We would like for these tasks to be performed asynchronously, with the
- goal of building the result set for requests that come in to our 
+ goal of building the result set for requests that come in to our
  backend.
 
 """
 
-import requests, validators
+import requests
+import validators
+from urllib.parse import urlparse
 from celery import Celery, Task
 from celery.contrib.methods import task_method
 from backend.parser import WaltzHTMLParser
@@ -21,13 +23,62 @@ q = Celery('tasks',broker='redis://localhost:6379/0')
 class AbstractTask(Task):
     abstract = True
 
+def validate_link(url, link):
 
-@q.task(name='backend.tasks.get_links_on_page', base=AbstractTask)
-def get_links_on_page(url, request, max_depth, current_depth, 
-                      keyword, searchmode):
+    # Sometimes links may not be as pretty as we expect,
+    # try to handle them here so that we can succeed in
+    # more cases
+    if link == '':
+        return False
 
+    parsed_url = urlparse(url)
+    parsed_link = urlparse(link)
+
+    if parsed_url.scheme == '':
+        url = 'http://' + url
+        # noticed that the netloc is empty and misplaced in the path
+        # when there is no scheme provided. Add a default scheme
+        # and reparse for more successes
+        parsed_url = urlparse(url)
+
+    new_link = ''
+    if parsed_link.netloc == '':
+        if parsed_url.netloc != '' and parsed_link.path != '':
+            new_link = parsed_url.scheme + '://' + parsed_url.netloc
+            if parsed_link.path.startswith('/'):
+                new_link += parsed_link.path
+            else:
+                new_link += '/' + parsed_link.path
+            print("appended scheme to %s" %(new_link))
+        else:
+            return False
+    else:
+        new_link = link
+
+    if validators.url(new_link) is False:
+        return False
+    # if validators.url(new_link) is False:
+    #     print("result of validators for %s: %r "  % ( link, validators.url(link)))
+    #     # Try to see if it's a relative link or something
+    #     # simple that would case this validator to fail
+    #     if validators.url(url + link) is False:
+    #         # give up, we can't fix it
+    #         return False
+    #     else:
+    #         print("prepended %s to %s" % (url, link))
+    #         link = url + link
+    #     # it worked! move on with this as the link
+    return new_link
+
+def check_for_keyword(response, keyword):
+    if keyword is not None and response.text.find(keyword) != -1:
+        return True
+    else:
+        return False
+
+def make_request(url):
     # We're going to do this santization here for the initial request
-    # so I can keep it out of javascript land and ensure that bad 
+    # so I can keep it out of javascript land and ensure that bad
     # urls don't get populated in the database
 
     if not url.startswith('http'):
@@ -39,39 +90,79 @@ def get_links_on_page(url, request, max_depth, current_depth,
     except Exception as e:
         raise
     if response.status_code != requests.codes.ok:
-        raise ValueError("Expected to get a response for %s, but didn't! Abort! Abort!" % (url))
+        print("Expected to get a response for %s, but didn't! Skipping." % (url))
         return
-    parser = WaltzHTMLParser()
+    else:
+        return response
+
+def recursive_dfs_approach(url, request, max_depth, current_depth, keyword, parser):
+    # I'm not proud of this.
+    response = make_request(url)
+    if not response:
+        # Just quit, no response means it's pointless to proceed
+        return
     parser.feed(data=response.text)
-    kw_was_found = False
-    if keyword is not None:
-        if response.text.find(keyword) != -1:
-                kw_was_found = True
-
-    for link in list(set(parser.links)):
-
-        if link.startswith('/'):
-            link = url + link
-
-        if not link.startswith('http'):
-            link = 'http://' + link
-
-        if not validators.url(url):
-            print("result of validators for %s: %r "  % ( link, validators.url(link)))
-            # Try to see if it's a relative link or something
-            # simple that would case this validator to fail
-            if not validators.url(url + link):
-                # give up, we can't fix it
-                continue
-            # it worked! move on with this as the link
-            link = url + link
-
-        e = Edge(request, url, link, current_depth, kw_was_found)
+    kw_was_found = check_for_keyword(response, keyword)
+    # Hard capping this at 10
+    link_set = list(set(parser.links))[:10]
+    print(link_set)
+    print(url)
+    for link in link_set:
+        index = link_set.index(link)
+        request_link = validate_link(url, link)
+        if request_link is False:
+            print("Failed to validate link, skipping")
+            continue
+        # Database action here, add the found edge to database
+        e = Edge(request, url, request_link, current_depth, kw_was_found)
         db.session.add(e)
         db.session.commit()
-        # Prepare for danger! Make another task for each link! #YOLO#
         if current_depth < max_depth:
-            print("generating task for %s at %d" % (link, current_depth+1))
-            get_links_on_page.delay(link, request, max_depth, 
+            print("DFS Recursion - idx:%d link:%s depth: %d" % (index, request_link, current_depth+1))
+            # Recursion should make the search appear like a stack.
+            # The most recent links are the ones we check first.
+            recursive_dfs_approach(request_link, request, max_depth,
+                                    current_depth+1, keyword, parser)
+    return
+
+@q.task(name='backend.tasks.get_links_on_page', base=AbstractTask)
+def get_links_on_page(url, request, max_depth, current_depth,
+                      keyword, searchmode):
+
+    # I'm going to try two approaches here. For the DFS approach, we'll
+    # re-use the parser class since we are going to do some ugly
+    # recursion, completely negating the cool task system we use with the BFS
+    # approach.
+
+    parser = WaltzHTMLParser()
+
+    if searchmode == 'DFS':
+        recursive_dfs_approach(url, request, max_depth, current_depth, keyword, parser)
+    elif searchmode == 'BFS':
+        response = make_request(url)
+        if not response:
+            # Just quit, no response means it's pointless to proceed
+            return
+        # Run response text through our parser to get the links
+        parser.feed(data=response.text)
+        # Check for the keyword in the response text
+        kw_was_found = check_for_keyword(response, keyword)
+
+        for link in list(set(parser.links)):
+            # Many of our links are poorly-formatted or garbage, try to fix
+            # them if possible
+            link = validate_link(url, link)
+            if link is False:
+                continue
+            # Database action here, add the found edge to database
+            e = Edge(request, url, link, current_depth, kw_was_found)
+            db.session.add(e)
+            db.session.commit()
+
+            # Prepare for danger! Make another task for each link!
+            if current_depth < max_depth:
+                print("generating task for %s at %d" % (link, current_depth+1))
+                get_links_on_page.delay(link, request, max_depth,
                                         current_depth+1, keyword, searchmode)
+
     return "impolite words here"
