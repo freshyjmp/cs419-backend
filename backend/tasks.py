@@ -88,19 +88,20 @@ def make_request(url):
     try:
         response = requests.get(url, timeout=5)
     except Exception as e:
-        raise
+        print(e)
+        return False
     if response.status_code != requests.codes.ok:
         print("Expected to get a response for %s, but didn't! Skipping." % (url))
         return
     else:
         return response
 
-def recursive_dfs_approach(url, request, max_depth, current_depth, keyword, parser):
+def recursive_dfs_approach(url, visited, request, max_depth, current_depth, keyword, parser):
     # I'm not proud of this.
     response = make_request(url)
     if not response:
         # Just quit, no response means it's pointless to proceed
-        return
+        return visited
     parser.feed(data=response.text)
     kw_was_found = check_for_keyword(response, keyword)
     # Hard capping this at 10
@@ -114,16 +115,17 @@ def recursive_dfs_approach(url, request, max_depth, current_depth, keyword, pars
             print("Failed to validate link, skipping")
             continue
         # Database action here, add the found edge to database
-        e = Edge(request, url, request_link, current_depth, kw_was_found)
+        e = Edge(request, visited, url, request_link, current_depth, kw_was_found)
+        visited += 1
         db.session.add(e)
         db.session.commit()
         if current_depth < max_depth:
-            print("DFS Recursion - idx:%d link:%s depth: %d" % (index, request_link, current_depth+1))
+            print("DFS Recursion - idx:%d link:%s depth: %d visited:%d" % (index, request_link, current_depth+1, visited))
             # Recursion should make the search appear like a stack.
             # The most recent links are the ones we check first.
-            recursive_dfs_approach(request_link, request, max_depth,
+            visited = recursive_dfs_approach(request_link, visited, request, max_depth,
                                     current_depth+1, keyword, parser)
-    return
+    return visited
 
 @q.task(name='backend.tasks.get_links_on_page', base=AbstractTask)
 def get_links_on_page(url, request, max_depth, current_depth,
@@ -135,9 +137,9 @@ def get_links_on_page(url, request, max_depth, current_depth,
     # approach.
 
     parser = WaltzHTMLParser()
-
+    visited = 0
     if searchmode == 'DFS':
-        recursive_dfs_approach(url, request, max_depth, current_depth, keyword, parser)
+        recursive_dfs_approach(url, visited, request, max_depth, current_depth, keyword, parser)
     elif searchmode == 'BFS':
         response = make_request(url)
         if not response:
@@ -155,7 +157,7 @@ def get_links_on_page(url, request, max_depth, current_depth,
             if link is False:
                 continue
             # Database action here, add the found edge to database
-            e = Edge(request, url, link, current_depth, kw_was_found)
+            e = Edge(request, visited, url, link, current_depth, kw_was_found)
             db.session.add(e)
             db.session.commit()
 
