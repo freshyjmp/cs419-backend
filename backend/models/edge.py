@@ -23,7 +23,7 @@ class Edge(db.Model):
     def as_dict(self):
         return {c.name: getattr(self, c.name) for c in self.__table__.columns}
 
-    def __init__(self, visit_number, request, src_url, dst_url, depth, had_keyword=False):
+    def __init__(self, request, visit_number, src_url, dst_url, depth, had_keyword=False):
         self.request = request
         self.visit_number = visit_number
         self.src_url = src_url
