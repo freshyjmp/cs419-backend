@@ -16,7 +16,12 @@ from celery.contrib.methods import task_method
 from backend.parser import WaltzHTMLParser
 from backend.models import Edge
 from backend.db import db
+from sqlalchemy import create_engine, MetaData
+from sqlalchemy.orm import scoped_session, sessionmaker
 
+engine = create_engine('sqlite:////tmp/test.db', convert_unicode=True)
+metadata = MetaData(bind=engine)
+db_session = scoped_session(sessionmaker(autocommit=False,autoflush=False, bind=engine))
 q = Celery('tasks',broker='redis://localhost:6379/0')
 
 
@@ -117,8 +122,8 @@ def recursive_dfs_approach(url, visited, request, max_depth, current_depth, keyw
         # Database action here, add the found edge to database
         e = Edge(request, visited, url, request_link, current_depth, kw_was_found)
         visited += 1
-        db.session.add(e)
-        db.session.commit()
+        db_session.add(e)
+        db_session.commit()
         if current_depth < max_depth:
             print("DFS Recursion - idx:%d link:%s depth: %d visited:%d" % (index, request_link, current_depth+1, visited))
             # Recursion should make the search appear like a stack.
@@ -157,9 +162,10 @@ def get_links_on_page(url, request, max_depth, current_depth,
             if link is False:
                 continue
             # Database action here, add the found edge to database
+            print("[request][%d] db insertion %s --> %s" % (request, url, link))
             e = Edge(request, visited, url, link, current_depth, kw_was_found)
-            db.session.add(e)
-            db.session.commit()
+            db_session.add(e)
+            db_session.commit()
 
             # Prepare for danger! Make another task for each link!
             if current_depth < max_depth:
