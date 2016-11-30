@@ -16,12 +16,8 @@ from celery.contrib.methods import task_method
 from backend.parser import WaltzHTMLParser
 from backend.models import Edge
 from backend.db import db
-from sqlalchemy import create_engine, MetaData
-from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy import and_
 
-engine = create_engine('sqlite:////tmp/test.db', convert_unicode=True)
-metadata = MetaData(bind=engine)
-db_session = scoped_session(sessionmaker(autocommit=False,autoflush=False, bind=engine))
 q = Celery('tasks',broker='redis://localhost:6379/0')
 
 
@@ -122,14 +118,23 @@ def recursive_dfs_approach(url, visited, request, max_depth, current_depth, keyw
         # Database action here, add the found edge to database
         e = Edge(request, visited, url, request_link, current_depth, kw_was_found)
         visited += 1
-        db_session.add(e)
-        db_session.commit()
+        db.session.add(e)
+        db.session.commit()
+        if kw_was_found is True:
+            print("Found keyword at the %dth page" % visited)
+            return -1
         if current_depth < max_depth:
             print("DFS Recursion - idx:%d link:%s depth: %d visited:%d" % (index, request_link, current_depth+1, visited))
             # Recursion should make the search appear like a stack.
             # The most recent links are the ones we check first.
             visited = recursive_dfs_approach(request_link, visited, request, max_depth,
                                     current_depth+1, keyword, parser)
+            # If we encounter a keyword, we have to stop processing but also
+            # bubble this up so we don't process any more links
+            if visited == -1:
+                print("We found the keyword!")
+                return -1
+
     return visited
 
 @q.task(name='backend.tasks.get_links_on_page', base=AbstractTask)
@@ -146,6 +151,14 @@ def get_links_on_page(url, request, max_depth, current_depth,
     if searchmode == 'DFS':
         recursive_dfs_approach(url, visited, request, max_depth, current_depth, keyword, parser)
     elif searchmode == 'BFS':
+        if keyword is not None:
+            was_kw_found = Edge.query.filter(and_(Edge.request == request,
+                  Edge.had_keyword == True)).count()
+            print("was_kw_found was %d" % was_kw_found)
+            if was_kw_found != 0:
+                print("Another task found the keyword!")
+                return
+        # make the request
         response = make_request(url)
         if not response:
             # Just quit, no response means it's pointless to proceed
@@ -162,11 +175,11 @@ def get_links_on_page(url, request, max_depth, current_depth,
             if link is False:
                 continue
             # Database action here, add the found edge to database
-            print("[request][%d] db insertion %s --> %s" % (request, url, link))
             e = Edge(request, visited, url, link, current_depth, kw_was_found)
-            db_session.add(e)
-            db_session.commit()
-
+            db.session.add(e)
+            db.session.commit()
+            if kw_was_found is True:
+                return "I got what I need"
             # Prepare for danger! Make another task for each link!
             if current_depth < max_depth:
                 print("generating task for %s at %d" % (link, current_depth+1))
