@@ -26,5 +26,5 @@ def show_chunked_result(request_id, row_number):
 
 @results.route('/api/results/<int:request_id>/rows')
 def get_rows_for_result(request_id):
-    query_result = Edge.query.filter_by(request=request_id).all()
-    return jsonify(rows=len(query_result))
+    query_result = Edge.query.filter_by(request=request_id).count()
+    return jsonify(rows=query_result)
