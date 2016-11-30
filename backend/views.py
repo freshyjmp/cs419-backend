@@ -23,3 +23,8 @@ def show_chunked_result(request_id, row_number):
         row_as_dict = row.as_dict()
         query_result[index] = row_as_dict
     return jsonify(rows=len(query_result),edges=query_result)
+
+@results.route('/api/results/<int:request_id>/rows')
+def get_rows_for_result(request_id):
+    query_result = Edge.query.filter_by(request=request_id).all()
+    return jsonify(rows=len(query_result))
